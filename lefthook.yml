@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: false
+  commands:
+    swift-format:
+      glob: "**/*.swift"
+      run: swift-format format --in-place {staged_files} && git add {staged_files}
+    swiftlint:
+      glob: "**/*.swift"
+      run: swiftlint lint --quiet {staged_files}
