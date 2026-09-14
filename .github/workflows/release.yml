@@ -1,0 +1,357 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v<version> tag to release'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Validate release metadata and duplicate state
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${RELEASE_TAG}"
+          if [[ "${tag}" != v* ]]; then
+            echo "::error::Release ref must be a v-prefixed tag: ${tag}"
+            exit 1
+          fi
+
+          version="${tag#v}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release version: ${version}"
+            exit 1
+          fi
+
+          exact_tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+          if [[ "${exact_tag}" != "${tag}" ]]; then
+            echo "::error::HEAD is not exactly the requested release tag ${tag}"
+            exit 1
+          fi
+
+          if [[ ! -f version.env ]]; then
+            echo "::error::Final Release requires version.env in the tagged commit"
+            exit 1
+          fi
+          if ! git ls-files --error-unmatch version.env >/dev/null 2>&1; then
+            echo "::error::Final Release requires tracked version.env"
+            exit 1
+          fi
+
+          version_from_file="$(awk -F= '$1 == "VERSION" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' version.env)"
+          build_number="$(awk -F= '$1 == "BUILD_NUMBER" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' version.env)"
+          if [[ "${version_from_file}" != "${version}" ]]; then
+            echo "::error::version.env VERSION=${version_from_file} does not match tag ${tag}"
+            exit 1
+          fi
+          if [[ ! "${build_number}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::BUILD_NUMBER must be a positive integer"
+            exit 1
+          fi
+
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::error::GitHub Release ${tag} already exists; cancelling this workflow"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/cancel"
+            exit 1
+          fi
+
+          is_beta=false
+          if [[ "${version}" == *-* ]]; then
+            is_beta=true
+          fi
+
+          {
+            echo "version=${version}"
+            echo "build_number=${build_number}"
+            echo "is_beta=${is_beta}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Show toolchain
+        run: |
+          set -euo pipefail
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve package dependencies
+        run: swift package resolve
+
+      - name: Build Release app
+        shell: bash
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild \
+            -project LoadStar.xcodeproj \
+            -scheme LoadStar \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS='arm64 x86_64' \
+            MARKETING_VERSION="${VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee build/release-build.log
+
+      - name: Verify Release app
+        id: app
+        shell: bash
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          build_settings="$(xcodebuild \
+            -project LoadStar.xcodeproj \
+            -scheme LoadStar \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS='arm64 x86_64' \
+            -showBuildSettings 2>/dev/null)"
+          built_products_dir="$(printf '%s\n' "${build_settings}" | grep -m 1 '^[[:space:]]*BUILT_PRODUCTS_DIR = ' | awk -F' = ' '{ print $2 }')"
+          app_path="${built_products_dir}/LoadStar.app"
+          binary_path="${app_path}/Contents/MacOS/LoadStar"
+          test -d "${app_path}"
+          test -x "${binary_path}"
+          printf '%s\n' "${build_settings}" | grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.tukuyomi032.loadstar'
+          lipo -info "${binary_path}" | tee build/release-lipo.txt
+          grep -q 'arm64' build/release-lipo.txt
+          grep -q 'x86_64' build/release-lipo.txt
+
+          public_key="$(plutil -extract SUPublicEDKey raw -o - "${app_path}/Contents/Info.plist" 2>/dev/null || true)"
+          feed_url="$(plutil -extract SUFeedURL raw -o - "${app_path}/Contents/Info.plist" 2>/dev/null || true)"
+          test -n "${public_key}"
+          test "${feed_url}" = 'https://tukuyomil032.github.io/Loadstar/appcast.xml'
+
+          echo "app_path=${app_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Extract release notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -f CHANGELOG.md
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for ${VERSION}"
+            exit 1
+          fi
+          awk -v target="## [${VERSION}]" '
+            index($0, target) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > build/release-notes.md
+          test -s build/release-notes.md
+
+      - name: Create DMG and checksum
+        id: artifact
+        shell: bash
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          APP_PATH: ${{ steps.app.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          dmg_name="LoadStar-v${VERSION}.dmg"
+          dmg_path="build/${dmg_name}"
+          staging_dir="build/dmg-root"
+          rm -rf "${staging_dir}"
+          mkdir -p "${staging_dir}"
+          ditto "${APP_PATH}" "${staging_dir}/LoadStar.app"
+          hdiutil create \
+            -volname 'LoadStar' \
+            -srcfolder "${staging_dir}" \
+            -ov \
+            -format UDZO \
+            "${dmg_path}"
+          test -f "${dmg_path}"
+          sha256="$(shasum -a 256 "${dmg_path}" | awk '{ print $1 }')"
+          printf '%s  %s\n' "${sha256}" "${dmg_name}" > "${dmg_path}.sha256"
+          {
+            echo "dmg_path=${dmg_path}"
+            echo "dmg_name=${dmg_name}"
+            echo "sha256=${sha256}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Sign DMG with Sparkle Ed25519 key
+        id: sparkle
+        shell: bash
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          DMG_PATH: ${{ steps.artifact.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+          test -n "${SPARKLE_PRIVATE_KEY}"
+          sparkle_checkout='build/DerivedData/SourcePackages/checkouts/Sparkle'
+          test -d "${sparkle_checkout}"
+          sign_update=''
+          if [[ -d "${sparkle_checkout}/sign_update" ]]; then
+            swift build --package-path "${sparkle_checkout}/sign_update" -c release
+            sign_update="$(swift build --package-path "${sparkle_checkout}/sign_update" -c release --show-bin-path)/sign_update"
+          fi
+          if [[ ! -x "${sign_update}" ]]; then
+            sign_update="$(find "${sparkle_checkout}" -type f -name sign_update -perm -111 -print -quit 2>/dev/null || true)"
+          fi
+          test -x "${sign_update}"
+          key_file="${RUNNER_TEMP}/loadstar-sparkle-private-key"
+          printf '%s' "${SPARKLE_PRIVATE_KEY}" > "${key_file}"
+          sign_output="$("${sign_update}" "${DMG_PATH}" --ed-key-file "${key_file}" 2>&1)"
+          signature="$(printf '%s\n' "${sign_output}" | grep -oE 'sparkle:edSignature="[^"]+"' | sed -E 's/^sparkle:edSignature="([^"]+)"/\1/' | tail -1)"
+          rm -f "${key_file}"
+          test -n "${signature}"
+          echo "signature=${signature}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          IS_BETA: ${{ steps.metadata.outputs.is_beta }}
+          DMG_PATH: ${{ steps.artifact.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+          release_args=(
+            "${TAG}"
+            "${DMG_PATH}"
+            "${DMG_PATH}.sha256"
+            --repo "${GITHUB_REPOSITORY}"
+            --title "LoadStar ${TAG}"
+            --notes-file build/release-notes.md
+            --verify-tag
+          )
+          if [[ "${IS_BETA}" == true ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}"
+
+      - name: Publish Sparkle Appcast to GitHub Pages
+        shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_NUMBER: ${{ steps.metadata.outputs.build_number }}
+          IS_BETA: ${{ steps.metadata.outputs.is_beta }}
+          SIGNATURE: ${{ steps.sparkle.outputs.signature }}
+          DMG_NAME: ${{ steps.artifact.outputs.dmg_name }}
+        run: |
+          set -euo pipefail
+          pages_dir="${RUNNER_TEMP}/loadstar-pages"
+          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" clone --depth 1 --branch gh-pages "https://github.com/${GITHUB_REPOSITORY}.git" "${pages_dir}"
+          appcast_file="${pages_dir}/appcast.xml"
+          test -f "${appcast_file}"
+          grep -q '<rss' "${appcast_file}"
+          grep -q '<channel>' "${appcast_file}"
+          grep -q '<language>' "${appcast_file}"
+          test -n "${SIGNATURE}"
+          file_size="$(stat -f%z "build/${DMG_NAME}")"
+          minimum_system_version="$(plutil -extract LSMinimumSystemVersion raw -o - "${{ steps.app.outputs.app_path }}/Contents/Info.plist" 2>/dev/null || printf '26.0')"
+          release_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${DMG_NAME}"
+          notes_text="$(sed 's/]]>/]]]]><![CDATA[>/g; s/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' build/release-notes.md)"
+          channel_element=''
+          if [[ "${IS_BETA}" == true ]]; then
+            channel_element='      <sparkle:channel>beta</sparkle:channel>'
+          fi
+          item_file="${RUNNER_TEMP}/loadstar-appcast-item.xml"
+          {
+            printf '%s\n' '              <item>'
+            printf '%s\n' "                <title>Version ${VERSION}</title>"
+            printf '%s\n' "                <sparkle:version>${BUILD_NUMBER}</sparkle:version>"
+            printf '%s\n' "                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+            printf '%s\n' "                <sparkle:minimumSystemVersion>${minimum_system_version}</sparkle:minimumSystemVersion>"
+            printf '%s\n' "${channel_element}"
+            printf '%s\n' "                <pubDate>$(date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>"
+            printf '%s\n' "                <description><![CDATA[<pre>${notes_text}</pre>]]></description>"
+            printf '%s\n' "                <enclosure url=\"${release_url}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${file_size}\" type=\"application/octet-stream\"/>"
+            printf '%s\n' '              </item>'
+          } > "${item_file}"
+          awk -v item="${item_file}" '
+            { print }
+            !inserted && /<language>/ {
+              while ((getline line < item) > 0) print line
+              close(item)
+              inserted = 1
+            }
+          ' "${appcast_file}" > "${appcast_file}.tmp"
+          mv "${appcast_file}.tmp" "${appcast_file}"
+          git -C "${pages_dir}" config user.name 'github-actions[bot]'
+          git -C "${pages_dir}" config user.email 'github-actions[bot]@users.noreply.github.com'
+          git -C "${pages_dir}" add appcast.xml
+          git -C "${pages_dir}" diff --cached --quiet && {
+            echo '::error::Appcast did not change'
+            exit 1
+          }
+          git -C "${pages_dir}" commit -m "chore: publish LoadStar ${TAG} appcast"
+          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" -C "${pages_dir}" push origin HEAD:gh-pages
+
+      - name: Update stable Homebrew cask
+        if: steps.metadata.outputs.is_beta != 'true'
+        shell: bash
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          test -n "${HOMEBREW_TAP_TOKEN}"
+          export GH_TOKEN="${HOMEBREW_TAP_TOKEN}"
+          tap_dir="${RUNNER_TEMP}/homebrew-tap"
+          gh repo clone tukuyomil032/homebrew-tap "${tap_dir}"
+          cask_file="${tap_dir}/Casks/loadstar.rb"
+          test -f "${cask_file}"
+          grep -q 'cask "loadstar"' "${cask_file}"
+          sed -i '' -E "s/version \"[^\"]+\"/version \"${VERSION}\"/" "${cask_file}"
+          sed -i '' -E "s/sha256 \"[^\"]+\"/sha256 \"${SHA256}\"/" "${cask_file}"
+          git -C "${tap_dir}" config user.name 'github-actions[bot]'
+          git -C "${tap_dir}" config user.email 'github-actions[bot]@users.noreply.github.com'
+          git -C "${tap_dir}" add Casks/loadstar.rb
+          git -C "${tap_dir}" diff --cached --quiet && {
+            echo '::error::Homebrew cask did not change'
+            exit 1
+          }
+          git -C "${tap_dir}" commit -m "chore: update LoadStar cask to ${VERSION}"
+          git -C "${tap_dir}" push origin HEAD
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadstar-release-${{ steps.metadata.outputs.version || 'unknown' }}
+          path: |
+            build/*.log
+            build/*.txt
+            build/*.dmg
+            build/*.sha256
