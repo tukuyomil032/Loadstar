@@ -1,0 +1,1 @@
+public enum LoadStarGuide: Sendable {}
