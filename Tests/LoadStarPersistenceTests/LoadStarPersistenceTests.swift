@@ -9,6 +9,22 @@ final class LoadStarPersistenceTests: XCTestCase {
         XCTAssertEqual(LoadStarPersistence.managedRootFolderName, "LoadStar")
     }
 
+    func testFixtureBundleContainsDeterministicSchemaCases() throws {
+        let codec = DocumentCodec()
+        let indexData = try FixtureLoader.data(at: "Persistence/server-index/valid.json")
+        let index = try codec.decode(ServerIndex.self, from: indexData, expectedDocumentType: .serverIndex)
+        XCTAssertEqual(index.schemaVersion.revision, 1)
+        XCTAssertEqual(
+            index.payload.entries.map(\.id.rawValue),
+            [
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            ])
+
+        let corruptData = try FixtureLoader.data(at: "Persistence/corrupt/malformed.json")
+        XCTAssertThrowsError(try codec.decodeRaw(corruptData))
+    }
+
     func testCodecFlattensPayloadAndRetainsUnknownFields() throws {
         let payload = CodecPayload(name: "alpha", count: 3)
         let document = try LoadStarDocument(
