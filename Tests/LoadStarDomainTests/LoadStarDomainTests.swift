@@ -101,4 +101,77 @@ final class LoadStarDomainTests: XCTestCase {
         XCTAssertEqual(secret.debugDescription, "<redacted>")
         XCTAssertFalse(String(reflecting: secret).contains("sensitive-token"))
     }
+
+    func testLifecycleKeepsProcessAndReadinessSeparate() throws {
+        let id = try ServerID(validating: "550e8400-e29b-41d4-a716-446655440000")
+        let initial = ServerRuntimeSnapshot(serverID: id, lifecycle: .preparing, readiness: .unknown)
+        let process = ProcessIdentity(
+            pid: 123,
+            startedAt: Date(timeIntervalSince1970: 1),
+            executableReference: "java (redacted)"
+        )
+
+        let running = ServerLifecycleReducer.reduce(initial, event: .processSpawned(process))
+        XCTAssertEqual(running.lifecycle, .running)
+        XCTAssertEqual(running.readiness, .probing)
+
+        let unavailable = ServerLifecycleReducer.reduce(
+            running,
+            event: .readinessFailed(ReadinessIssue(code: "server.readiness.timeout", message: "Timed out."))
+        )
+        XCTAssertEqual(unavailable.lifecycle, .running)
+        guard case .unconnected(let issue) = unavailable.readiness else {
+            return XCTFail("A readiness failure must keep the process running.")
+        }
+        XCTAssertEqual(issue?.code, "server.readiness.timeout")
+        XCTAssertTrue(unavailable.capabilities.canStop)
+        XCTAssertTrue(unavailable.capabilities.canOpenLogs)
+        XCTAssertFalse(unavailable.capabilities.canUsePlayerActions)
+    }
+
+    func testReadinessSuccessEnablesSLPDependentCapabilities() throws {
+        let id = try ServerID(validating: "550e8400-e29b-41d4-a716-446655440000")
+        let snapshot = ServerRuntimeSnapshot(serverID: id, lifecycle: .running, readiness: .probing)
+        let ready = ServerLifecycleReducer.reduce(snapshot, event: .readinessReady(ServerPing(versionName: "1.21")))
+
+        XCTAssertEqual(ready.readiness, .ready(ServerPing(versionName: "1.21")))
+        XCTAssertTrue(ready.capabilities.canUsePlayerActions)
+        XCTAssertTrue(ready.capabilities.canUseTPSActions)
+    }
+
+    func testUnexpectedExitBecomesCrashButExpectedStopBecomesOffline() throws {
+        let id = try ServerID(validating: "550e8400-e29b-41d4-a716-446655440000")
+        let running = ServerRuntimeSnapshot(serverID: id, lifecycle: .running, readiness: .probing)
+
+        let crashed = ServerLifecycleReducer.reduce(
+            running,
+            event: .processExited(ProcessExit(exitCode: 1, expected: false))
+        )
+        XCTAssertEqual(crashed.lifecycle, .crashed(ProcessExit(exitCode: 1, expected: false)))
+
+        let stopped = ServerLifecycleReducer.reduce(
+            running,
+            event: .processExited(ProcessExit(exitCode: 0, expected: true))
+        )
+        XCTAssertEqual(stopped.lifecycle, .offline)
+        XCTAssertEqual(stopped.readiness, .unknown)
+    }
+
+    func testJVMParserRejectsUnsafeInputAndStoredTokenMismatch() throws {
+        let parser = JVMArgumentParser()
+        XCTAssertEqual(try parser.parse("-Xmx2G -Dfile.encoding=UTF-8"), ["-Xmx2G", "-Dfile.encoding=UTF-8"])
+        XCTAssertThrowsError(try parser.parse("-javaagent:agent.jar"))
+        XCTAssertThrowsError(try parser.parse("-Xmx2G; touch /tmp/unsafe"))
+        XCTAssertThrowsError(try parser.parse("-Xmx2G", storedTokens: ["-Xmx1G"]))
+        XCTAssertThrowsError(try parser.parse(Array(repeating: "-Xmx1G", count: 33).joined(separator: " ")))
+    }
+
+    func testUnmanagedStateDisablesDestructiveOperations() throws {
+        let id = try ServerID(validating: "550e8400-e29b-41d4-a716-446655440000")
+        let snapshot = ServerRuntimeSnapshot(serverID: id, lifecycle: .unmanaged, readiness: .unknown)
+
+        XCTAssertFalse(snapshot.capabilities.canStop)
+        XCTAssertFalse(snapshot.capabilities.canRestart)
+        XCTAssertFalse(snapshot.capabilities.canOpenConsole)
+    }
 }
