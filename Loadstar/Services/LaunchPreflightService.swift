@@ -82,8 +82,7 @@ public struct LaunchPreflightService: Sendable {
             let message = "Java \(actual) does not match required major \(requiredMajor)."
             if intent == .manual {
                 return LaunchPreflightReport(
-                    result: .needsUserConfirmation(
-                        ConfirmationRequirement(code: "java.compatibility.mismatch", message: message, intent: intent)),
+                    result: .ready(warnings: [LaunchWarning(code: "java.compatibility.mismatch", message: message)]),
                     javaResolution: javaResolution,
                     validatedJVMArguments: arguments
                 )

@@ -21,6 +21,27 @@ public enum OperationStatus: String, Codable, Equatable, Sendable {
     case needsRecovery
 }
 
+public enum LifecycleCheckpointStage: String, Codable, Equatable, Sendable {
+    case launch
+    case probing
+    case stopping
+    case forceTerminationPending
+    case crash
+    case cleanup
+}
+
+public struct LifecycleCheckpointPayload: Codable, Equatable, Sendable {
+    public let stage: LifecycleCheckpointStage
+    public let serverID: ServerID
+    public let sessionID: ProcessSessionID?
+
+    public init(stage: LifecycleCheckpointStage, serverID: ServerID, sessionID: ProcessSessionID? = nil) {
+        self.stage = stage
+        self.serverID = serverID
+        self.sessionID = sessionID
+    }
+}
+
 public struct OperationCheckpoint: Codable, Equatable, Sendable, LoadStarDocumentPayload {
     public static let documentType = DocumentType.operation
     public static let currentSchemaRevision = 1
