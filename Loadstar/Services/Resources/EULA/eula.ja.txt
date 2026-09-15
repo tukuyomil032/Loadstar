@@ -1,0 +1,7 @@
+Minecraft EULA（日本語参考訳）
+
+Minecraft: Java Edition のサーバーを運用する前に、運用者は公式 Minecraft EULA を確認し、同意する必要があります。この文章は確認のための参考訳であり、契約上の正本ではありません。現在の公式条項は次の URL で確認してください。
+
+https://www.minecraft.net/en-us/eula
+
+LoadStar 上で同意すると、公式条項を確認し、それらを遵守することを確認した扱いになります。LoadStar は Minecraft のソフトウェアやコンテンツについて追加の権利を与えるものではありません。

@@ -32,7 +32,8 @@ let package = Package(
         .target(
             name: "LoadStarServices",
             dependencies: ["LoadStarDomain", "LoadStarPersistence", "LoadStarPlatform", .product(name: "Sparkle", package: "Sparkle")],
-            path: "Loadstar/Services"
+            path: "Loadstar/Services",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "LoadStarFeatures",

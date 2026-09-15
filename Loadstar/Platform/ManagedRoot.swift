@@ -203,7 +203,9 @@ public final class LocalFileSystemClient: FileSystemClient, @unchecked Sendable 
             return .operationFailed(code: "path.validation.\(String(describing: error))", target: path)
         }
         let nsError = error as NSError
-        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileNoSuchFileError {
+        if nsError.domain == NSCocoaErrorDomain,
+            nsError.code == NSFileNoSuchFileError || nsError.code == NSFileReadNoSuchFileError
+        {
             return .notFound(path)
         }
         if nsError.domain == NSCocoaErrorDomain,
