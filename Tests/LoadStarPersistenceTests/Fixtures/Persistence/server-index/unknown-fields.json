@@ -1,0 +1,8 @@
+{
+  "documentType": "server-index",
+  "entries": [
+    { "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+  ],
+  "futureIndexField": { "preserve": true },
+  "schemaVersion": 1
+}

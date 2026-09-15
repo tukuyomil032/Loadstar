@@ -1,0 +1,8 @@
+{
+  "detectedAt": "2023-11-14T22:13:20Z",
+  "detectedRevision": 1,
+  "documentType": "server-metadata",
+  "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  "issueCode": "document.invalid",
+  "path": ["quarantine", "documents", "server-metadata-cccccccc-cccc-4ccc-8ccc-cccccccccccc.json"]
+}

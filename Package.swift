@@ -46,12 +46,21 @@ let package = Package(
         ),
         .target(name: "LoadStarGuide", dependencies: ["LoadStarDomain", "LoadStarUI"], path: "Loadstar/Guide"),
         .testTarget(name: "LoadStarDomainTests", dependencies: ["LoadStarDomain"], path: "Tests/LoadStarDomainTests"),
-        .testTarget(name: "LoadStarPersistenceTests", dependencies: ["LoadStarPersistence"], path: "Tests/LoadStarPersistenceTests"),
+        .testTarget(
+            name: "LoadStarPersistenceTests",
+            dependencies: ["LoadStarPersistence"],
+            path: "Tests/LoadStarPersistenceTests",
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "LoadStarPlatformTests", dependencies: ["LoadStarPlatform"], path: "Tests/LoadStarPlatformTests"),
         .testTarget(name: "LoadStarServicesTests", dependencies: ["LoadStarServices"], path: "Tests/LoadStarServicesTests"),
         .testTarget(name: "LoadStarFeaturesTests", dependencies: ["LoadStarFeatures"], path: "Tests/LoadStarFeaturesTests"),
         .testTarget(name: "LoadStarUITests", dependencies: ["LoadStarUI"], path: "Tests/LoadStarUITests"),
-        .testTarget(name: "LoadStarIntegrationTests", dependencies: ["LoadStarServices"], path: "Tests/LoadStarIntegrationTests"),
+        .testTarget(
+            name: "LoadStarIntegrationTests",
+            dependencies: ["LoadStarDomain", "LoadStarPersistence", "LoadStarPlatform", "LoadStarServices"],
+            path: "Tests/LoadStarIntegrationTests"
+        ),
         .testTarget(name: "LoadStarAcceptanceTests", dependencies: ["LoadStarFeatures", "LoadStarUI"], path: "Tests/LoadStarAcceptanceTests"),
     ]
 )

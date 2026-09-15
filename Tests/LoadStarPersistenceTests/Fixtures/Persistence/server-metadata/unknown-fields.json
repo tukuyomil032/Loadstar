@@ -1,0 +1,39 @@
+{
+  "documentType": "server-metadata",
+  "identity": {
+    "displayName": "Example Server",
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "futureIdentityField": "preserve"
+  },
+  "policies": {
+    "backup": {
+      "retentionCount": 3,
+      "schedule": { "hour": 3, "kind": "daily", "minute": 30 }
+    },
+    "crashRecovery": { "delaySeconds": null, "mode": "prompt" },
+    "notifications": { "enabled": true, "highCPUAlertsEnabled": false }
+  },
+  "provenance": {
+    "observedAt": "2023-11-14T22:13:20Z",
+    "source": "userCreated",
+    "verification": "verified",
+    "verifiedAt": "2023-11-14T22:13:20Z"
+  },
+  "runtimeConfiguration": {
+    "eulaAccepted": true,
+    "javaSelection": { "kind": "systemDefault" },
+    "jarFileName": "server.jar",
+    "jvmArguments": {
+      "raw": "",
+      "validatedTokens": [],
+      "validation": "unvalidated"
+    },
+    "memoryMiB": 2048,
+    "futureRuntimeOption": { "mode": "preserve" }
+  },
+  "schemaVersion": 1,
+  "timestamps": {
+    "configurationChangedAt": "2023-11-14T22:13:20Z",
+    "registeredAt": "2023-11-14T22:13:20Z"
+  }
+}
