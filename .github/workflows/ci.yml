@@ -92,12 +92,24 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             ARCHS='arm64 x86_64' \
             -showBuildSettings 2>/dev/null)"
-          built_products_dir="$(printf '%s\n' "$build_settings" | grep -m 1 '^[[:space:]]*BUILT_PRODUCTS_DIR = ' | awk -F' = ' '{ print $2 }')"
+          built_products_dir="$(awk -F' = ' '
+            /^[[:space:]]*BUILT_PRODUCTS_DIR = / {
+              print $2
+              exit
+            }
+          ' <<< "$build_settings")"
           app_path="${built_products_dir}/LoadStar.app"
           binary_path="${app_path}/Contents/MacOS/LoadStar"
           test -d "$app_path"
           test -x "$binary_path"
-          printf '%s\n' "$build_settings" | grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.tukuyomi032.loadstar.debug'
+          awk '
+            /PRODUCT_BUNDLE_IDENTIFIER = com.tukuyomi032.loadstar.debug/ {
+              found = 1
+            }
+            END {
+              exit !found
+            }
+          ' <<< "$build_settings"
           lipo -info "$binary_path" | tee build/ci-lipo.txt
           grep -q 'arm64' build/ci-lipo.txt
           grep -q 'x86_64' build/ci-lipo.txt
