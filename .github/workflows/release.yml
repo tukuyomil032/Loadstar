@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  # Release is deliberately tag-driven. GitHub does not evaluate path filters
+  # for tag pushes, so version.env is checked against the tag in the job below.
   push:
     tags:
       - 'v*'

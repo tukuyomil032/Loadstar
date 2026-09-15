@@ -14,7 +14,7 @@ Create the native Swift package, identity, dependency lock, scripts, hooks, and 
 - [x] Add Sparkle, Defaults, STTextView, and Package.resolved.
 - [x] Configure Swift 6, String Catalog, SwiftLint, SwiftFormat, and Lefthook.
 - [x] Add local version.env, build/test/Debug-run scripts, and bundle-ID isolation; version.env remains uncommitted during normal development.
-- [x] Add direct-command CI and Test workflows; repository scripts remain local-only.
+- [x] Add direct-command CI and Test workflows with source-aware path filters; repository scripts remain local-only.
 - [x] Verify arm64, x86_64, and universal output locally.
 - [x] Verify a clean checkout and hosted CI/Test execution.
 

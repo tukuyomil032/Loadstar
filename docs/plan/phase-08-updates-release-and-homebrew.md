@@ -15,7 +15,7 @@ Implement reproducible Stable/Beta release preparation, Sparkle, Appcast, DMG, a
 - [ ] Integrate the same release notes into the in-app update screen.
 - [ ] Implement Sparkle Ed25519, one Appcast, channel filtering, validation, and fail-closed updates.
 - [x] Implement canonical universal DMG naming and hash propagation in the direct Release workflow.
-- [x] Define the direct-command Release workflow, duplicate cancellation, and Stable-only cask update boundary.
+- [x] Define the direct-command, tag-driven Release workflow, duplicate cancellation, and Stable-only cask update boundary; validate version.env inside the workflow because tag pushes do not evaluate path filters.
 - [x] Verify statically that the direct Release workflow contains no notarization or stapling commands.
 
 ## Exit criteria
