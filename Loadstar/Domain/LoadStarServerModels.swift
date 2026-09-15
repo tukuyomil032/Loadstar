@@ -108,6 +108,102 @@ public enum JVMArgumentValidation: String, Codable, Equatable, Sendable {
     case invalid
 }
 
+public enum RuntimeSoftware: Equatable, Sendable, Codable {
+    case vanilla
+    case paper
+    case fabric
+    case forge
+    case neoforge
+    case unknown(rawValue: String)
+
+    private enum CodingKeys: String, CodingKey { case kind, rawValue }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(String.self, forKey: .kind)
+        switch kind {
+        case "vanilla": self = .vanilla
+        case "paper": self = .paper
+        case "fabric": self = .fabric
+        case "forge": self = .forge
+        case "neoforge": self = .neoforge
+        case "unknown":
+            let rawValue = try container.decodeIfPresent(String.self, forKey: .rawValue) ?? "unknown"
+            guard !rawValue.isEmpty else { throw DomainValidationError.invalidRuntimeIdentity }
+            self = .unknown(rawValue: rawValue)
+        default:
+            self = .unknown(rawValue: kind)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .vanilla: try container.encode("vanilla", forKey: .kind)
+        case .paper: try container.encode("paper", forKey: .kind)
+        case .fabric: try container.encode("fabric", forKey: .kind)
+        case .forge: try container.encode("forge", forKey: .kind)
+        case .neoforge: try container.encode("neoforge", forKey: .kind)
+        case .unknown(let rawValue):
+            guard !rawValue.isEmpty else { throw DomainValidationError.invalidRuntimeIdentity }
+            try container.encode("unknown", forKey: .kind)
+            try container.encode(rawValue, forKey: .rawValue)
+        }
+    }
+}
+
+public struct RuntimeIdentity: Codable, Equatable, Sendable {
+    public var software: RuntimeSoftware
+    public var minecraftVersion: String
+    public var loader: String?
+
+    public init(
+        software: RuntimeSoftware,
+        minecraftVersion: String,
+        loader: String? = nil
+    ) {
+        self.software = software
+        self.minecraftVersion = minecraftVersion
+        self.loader = loader
+    }
+
+    public static let unknown = Self(software: .unknown(rawValue: "unknown"), minecraftVersion: "unknown")
+
+    public func validate() throws {
+        guard !minecraftVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw DomainValidationError.invalidRuntimeIdentity
+        }
+        if let loader, loader.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw DomainValidationError.invalidRuntimeIdentity
+        }
+    }
+}
+
+public struct JavaVerification: Codable, Equatable, Sendable {
+    public let majorVersion: Int?
+    public let vendor: String?
+    public let verification: VerificationState
+    public let verifiedAt: Date?
+
+    public init(
+        majorVersion: Int?,
+        vendor: String?,
+        verification: VerificationState,
+        verifiedAt: Date?
+    ) {
+        self.majorVersion = majorVersion
+        self.vendor = vendor
+        self.verification = verification
+        self.verifiedAt = verifiedAt
+    }
+
+    public func validate() throws {
+        if let majorVersion, majorVersion < 1 {
+            throw DomainValidationError.invalidJavaVerification
+        }
+    }
+}
+
 public struct JVMArguments: Codable, Equatable, Sendable {
     public let raw: String
     public let validatedTokens: [String]
@@ -130,13 +226,33 @@ public struct RuntimeConfiguration: Codable, Equatable, Sendable {
     public var javaSelection: JavaSelection
     public var jvmArguments: JVMArguments
     public var eulaAccepted: Bool
+    public var serverPort: Int
+    public var runtimeIdentity: RuntimeIdentity
+    public var jarArtifact: ArtifactIdentity?
+    public var javaVerification: JavaVerification?
+
+    private enum CodingKeys: String, CodingKey {
+        case memoryMiB
+        case jarFileName
+        case javaSelection
+        case jvmArguments
+        case eulaAccepted
+        case serverPort
+        case runtimeIdentity
+        case jarArtifact
+        case javaVerification
+    }
 
     public init(
         memoryMiB: Int,
         jarFileName: String,
         javaSelection: JavaSelection,
         jvmArguments: JVMArguments,
-        eulaAccepted: Bool
+        eulaAccepted: Bool,
+        serverPort: Int = 25_565,
+        runtimeIdentity: RuntimeIdentity = .unknown,
+        jarArtifact: ArtifactIdentity? = nil,
+        javaVerification: JavaVerification? = nil
     ) throws {
         guard (256...65_536).contains(memoryMiB) else {
             throw DomainValidationError.invalidMemoryMiB(memoryMiB)
@@ -144,12 +260,36 @@ public struct RuntimeConfiguration: Codable, Equatable, Sendable {
         guard Self.isSafeJarFileName(jarFileName) else {
             throw DomainValidationError.invalidJarFileName(jarFileName)
         }
+        guard (1...65_535).contains(serverPort) else {
+            throw DomainValidationError.invalidServerPort(serverPort)
+        }
+        try runtimeIdentity.validate()
+        try javaVerification?.validate()
 
         self.memoryMiB = memoryMiB
         self.jarFileName = jarFileName
         self.javaSelection = javaSelection
         self.jvmArguments = jvmArguments
         self.eulaAccepted = eulaAccepted
+        self.serverPort = serverPort
+        self.runtimeIdentity = runtimeIdentity
+        self.jarArtifact = jarArtifact
+        self.javaVerification = javaVerification
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            memoryMiB: try container.decode(Int.self, forKey: .memoryMiB),
+            jarFileName: try container.decode(String.self, forKey: .jarFileName),
+            javaSelection: try container.decode(JavaSelection.self, forKey: .javaSelection),
+            jvmArguments: try container.decode(JVMArguments.self, forKey: .jvmArguments),
+            eulaAccepted: try container.decode(Bool.self, forKey: .eulaAccepted),
+            serverPort: try container.decodeIfPresent(Int.self, forKey: .serverPort) ?? 25_565,
+            runtimeIdentity: try container.decodeIfPresent(RuntimeIdentity.self, forKey: .runtimeIdentity) ?? .unknown,
+            jarArtifact: try container.decodeIfPresent(ArtifactIdentity.self, forKey: .jarArtifact),
+            javaVerification: try container.decodeIfPresent(JavaVerification.self, forKey: .javaVerification)
+        )
     }
 
     public func validate() throws {
@@ -159,6 +299,11 @@ public struct RuntimeConfiguration: Codable, Equatable, Sendable {
         guard Self.isSafeJarFileName(jarFileName) else {
             throw DomainValidationError.invalidJarFileName(jarFileName)
         }
+        guard (1...65_535).contains(serverPort) else {
+            throw DomainValidationError.invalidServerPort(serverPort)
+        }
+        try runtimeIdentity.validate()
+        try javaVerification?.validate()
     }
 
     private static func isSafeJarFileName(_ value: String) -> Bool {
@@ -221,7 +366,7 @@ public struct MetadataTimestamps: Codable, Equatable, Sendable {
 
 public struct ServerMetadata: Codable, Equatable, Sendable, LoadStarDocumentPayload {
     public static let documentType = DocumentType.serverMetadata
-    public static let currentSchemaRevision = 1
+    public static let currentSchemaRevision = 2
 
     public var identity: ServerIdentity
     public var runtimeConfiguration: RuntimeConfiguration
