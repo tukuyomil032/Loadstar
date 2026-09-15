@@ -1,0 +1,72 @@
+name: ✨ Feature Request
+description: Suggest a new feature or improvement for LoadStar
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please describe the problem you want to solve and how the proposal would help.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: What problem, limitation, or user need motivates this request?
+      placeholder: I would like to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature or behavior you would like to see.
+      placeholder: It would be helpful if LoadStar could...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternatives, workarounds, or existing tools have you considered?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature Area
+      description: Which part of LoadStar does this request relate to?
+      options:
+        - Minecraft server lifecycle
+        - Files and persistence
+        - Backups and restore
+        - Plugins, mods, and providers
+        - Users and permissions
+        - Network, proxy, or ngrok
+        - Console, dashboard, or notifications
+        - Settings, onboarding, or accessibility
+        - Updates and distribution
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockups-references
+    attributes:
+      label: Mockups / References
+      description: Attach mockups, sketches, screenshots, links, or examples from other applications when useful.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add use cases, compatibility considerations, or any other context.
+    validations:
+      required: false

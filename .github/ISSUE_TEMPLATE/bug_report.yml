@@ -1,0 +1,129 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in LoadStar
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please provide enough detail for us to reproduce the behavior. Remove secrets, private paths, credentials, and personal information before attaching logs or media.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the problem and what you were doing when it happened.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: List the smallest set of steps that reproduces the behavior.
+      placeholder: |
+        1. Open LoadStar
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what should have happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What happened instead? Include visible errors or state changes.
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: input
+    id: loadstar-version
+    attributes:
+      label: LoadStar Version / Commit SHA
+      description: Which released version or source commit are you using?
+      placeholder: e.g. 0.1.0 or abc1234
+    validations:
+      required: true
+
+  - type: dropdown
+    id: macos-version
+    attributes:
+      label: macOS Version
+      description: Which macOS version are you running?
+      options:
+        - macOS 26
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mac-architecture
+    attributes:
+      label: Mac Architecture
+      description: Which processor architecture is affected?
+      options:
+        - Apple silicon
+        - Intel
+        - Unknown / Other
+    validations:
+      required: false
+
+  - type: dropdown
+    id: installation-method
+    attributes:
+      label: Installation / Build Method
+      description: How did you install or build LoadStar?
+      options:
+        - Built from source
+        - DMG
+        - Homebrew
+        - Other
+    validations:
+      required: false
+
+  - type: dropdown
+    id: affected-area
+    attributes:
+      label: Affected Area
+      description: Which part of LoadStar is affected?
+      options:
+        - Minecraft server lifecycle
+        - Files and persistence
+        - Backups and restore
+        - Plugins, mods, and providers
+        - Users and permissions
+        - Network, proxy, or ngrok
+        - Console, dashboard, or notifications
+        - Settings, onboarding, or UI
+        - Updates and distribution
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs-screenshots-recordings
+    attributes:
+      label: Logs / Screenshots / Recordings
+      description: If relevant, attach logs or media after removing secrets, Keychain values, private paths, credentials, and personal information.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, workaround, or related information.
+    validations:
+      required: false
