@@ -11,6 +11,7 @@ public actor DocumentStore {
     private let writer: AtomicDocumentWriter
     private let quarantineStore: QuarantineStore
     private var diagnostics: [PersistenceIssue] = []
+    private var pendingMigrationBackups: [ManagedPath: MigrationBackup] = [:]
 
     public init(
         fileSystem: any FileSystemClient,
@@ -119,7 +120,11 @@ public actor DocumentStore {
 
             try document.payload.validate()
             let data = try codec.encode(document)
-            return await atomicWrite(data: data, document: document, at: path)
+            let state = await atomicWrite(data: data, document: document, at: path)
+            if case .loaded = state {
+                await cleanupMigrationBackup(for: path, documentType: document.documentType)
+            }
+            return state
         } catch {
             return .failed(
                 issue(
@@ -184,94 +189,23 @@ public actor DocumentStore {
         data: Data,
         header: DocumentHeader
     ) async -> PersistenceState<Payload> {
-        let backupID = OperationID.new()
-        let backupPath: ManagedPath
-
-        do {
-            backupPath = try ManagedPath(components: [
-                "quarantine",
-                "migration-backups",
-                "\(documentType.rawValue)-\(backupID.rawValue).json",
-            ])
-            if let parent = backupPath.parent {
-                try await fileSystem.createDirectory(at: parent)
-            }
-            try await fileSystem.copyItem(at: path, to: backupPath)
-        } catch let error as FileSystemError {
-            return .failed(
-                issue(
-                    code: "migration.backupFailed",
-                    stage: .backup,
-                    documentType: documentType,
-                    target: path,
-                    outcome: "The original document was retained, but migration backup could not be created.",
-                    retryability: .retryable,
-                    retainedData: "Original document retained.",
-                    recoveryAction: .retry,
-                    detail: String(describing: error)
-                ))
-        } catch {
-            return .failed(
-                issue(
-                    code: "migration.backupFailed",
-                    stage: .backup,
-                    documentType: documentType,
-                    target: path,
-                    outcome: "The original document was retained, but migration backup could not be created.",
-                    retryability: .retryable,
-                    retainedData: "Original document retained.",
-                    recoveryAction: .retry,
-                    detail: String(describing: error)
-                ))
+        let backup: MigrationBackup
+        switch await prepareMigrationBackup(documentType: documentType, path: path, header: header) {
+        case .success(let preparedBackup):
+            backup = preparedBackup
+        case .failure(let failure):
+            return .failed(failure)
         }
 
-        let backup = MigrationBackup(
-            id: backupID,
-            documentType: documentType,
-            fromRevision: header.revision,
-            path: backupPath,
-            createdAt: clock.now()
-        )
-
+        let migratedRaw: JSONValue
         do {
             let raw = try codec.decodeRaw(data)
-            let migratedRaw = try migrations.migrate(
+            migratedRaw = try migrations.migrate(
                 raw,
                 documentType: documentType,
                 fromRevision: header.revision,
                 toRevision: Payload.currentSchemaRevision
             )
-            let migratedData = try codec.encodeRaw(migratedRaw)
-            let document = try codec.decode(type, from: migratedData, expectedDocumentType: documentType)
-            try document.payload.validate()
-
-            let result = await atomicWrite(data: try codec.encode(document), document: document, at: path)
-            switch result {
-            case .loaded:
-                return .migrated(document.payload, backup: backup)
-            case .failed(let failure):
-                return .rolledBack(failure, backup: backup)
-            case .permissionDenied(let failure):
-                return .rolledBack(failure, backup: backup)
-            case .repairRequired(let failure):
-                return .rolledBack(failure, backup: backup)
-            case .rolledBack(let failure, _):
-                return .rolledBack(failure, backup: backup)
-            default:
-                return .rolledBack(
-                    issue(
-                        code: "migration.commitFailed",
-                        stage: .replace,
-                        documentType: documentType,
-                        target: path,
-                        outcome: "Migration did not commit the converted document.",
-                        retryability: .retryable,
-                        retainedData: "Original document and migration backup retained.",
-                        recoveryAction: .retry
-                    ),
-                    backup: backup
-                )
-            }
         } catch {
             return .rolledBack(
                 issue(
@@ -287,6 +221,146 @@ public actor DocumentStore {
                 ),
                 backup: backup
             )
+        }
+
+        let document: LoadStarDocument<Payload>
+        do {
+            let migratedData = try codec.encodeRaw(migratedRaw)
+            document = try codec.decode(type, from: migratedData, expectedDocumentType: documentType)
+            try document.payload.validate()
+        } catch {
+            return .rolledBack(
+                issue(
+                    code: "migration.validationFailed",
+                    stage: .validation,
+                    documentType: documentType,
+                    target: path,
+                    outcome: "Migration produced a document that failed schema or typed validation.",
+                    retryability: .userActionRequired,
+                    retainedData: "Original document and migration backup retained.",
+                    recoveryAction: .restoreLastKnownGood,
+                    detail: String(describing: error)
+                ),
+                backup: backup
+            )
+        }
+
+        let encodedDocument: Data
+        do {
+            encodedDocument = try codec.encode(document)
+        } catch {
+            return .rolledBack(
+                issue(
+                    code: "migration.encodeFailed",
+                    stage: .encode,
+                    documentType: documentType,
+                    target: path,
+                    outcome: "The migrated document could not be encoded.",
+                    retryability: .userActionRequired,
+                    retainedData: "Original document and migration backup retained.",
+                    recoveryAction: .restoreLastKnownGood,
+                    detail: String(describing: error)
+                ),
+                backup: backup
+            )
+        }
+
+        let result = await atomicWrite(data: encodedDocument, document: document, at: path)
+        switch result {
+        case .loaded:
+            pendingMigrationBackups[path] = backup
+            return .migrated(document.payload, backup: backup)
+        case .failed(let failure):
+            return .rolledBack(failure, backup: backup)
+        case .permissionDenied(let failure):
+            return .rolledBack(failure, backup: backup)
+        case .repairRequired(let failure):
+            return .rolledBack(failure, backup: backup)
+        case .rolledBack(let failure, _):
+            return .rolledBack(failure, backup: backup)
+        default:
+            return .rolledBack(
+                issue(
+                    code: "migration.commitFailed",
+                    stage: .replace,
+                    documentType: documentType,
+                    target: path,
+                    outcome: "Migration did not commit the converted document.",
+                    retryability: .retryable,
+                    retainedData: "Original document and migration backup retained.",
+                    recoveryAction: .retry
+                ),
+                backup: backup
+            )
+        }
+    }
+
+    private func prepareMigrationBackup(
+        documentType: DocumentType,
+        path: ManagedPath,
+        header: DocumentHeader
+    ) async -> MigrationBackupPreparation {
+        let backupID = OperationID.new()
+        do {
+            let backupPath = try ManagedPath(components: [
+                "quarantine",
+                "migration-backups",
+                "\(documentType.rawValue)-\(backupID.rawValue).json",
+            ])
+            if let parent = backupPath.parent {
+                try await fileSystem.createDirectory(at: parent)
+            }
+            try await fileSystem.copyItem(at: path, to: backupPath)
+            return .success(
+                MigrationBackup(
+                    id: backupID,
+                    documentType: documentType,
+                    fromRevision: header.revision,
+                    path: backupPath,
+                    createdAt: clock.now()
+                ))
+        } catch {
+            return .failure(
+                issue(
+                    code: "migration.backupFailed",
+                    stage: .backup,
+                    documentType: documentType,
+                    target: path,
+                    outcome: "The original document was retained, but migration backup could not be created.",
+                    retryability: .retryable,
+                    retainedData: "Original document retained.",
+                    recoveryAction: .retry,
+                    detail: String(describing: error)
+                ))
+        }
+    }
+
+    private func cleanupMigrationBackup(for path: ManagedPath, documentType: DocumentType) async {
+        guard let backup = pendingMigrationBackups[path] else {
+            return
+        }
+
+        do {
+            guard try await fileSystem.exists(at: backup.path) else {
+                pendingMigrationBackups.removeValue(forKey: path)
+                return
+            }
+            try await fileSystem.removeItem(at: backup.path)
+            pendingMigrationBackups.removeValue(forKey: path)
+        } catch {
+            diagnostics.append(
+                issue(
+                    code: "migration.backupCleanupPending",
+                    stage: .cleanup,
+                    documentType: documentType,
+                    target: path,
+                    outcome:
+                        "The document was saved, but its previous migration backup remains available for recovery.",
+                    retryability: .retryable,
+                    retainedData: "Saved document and migration backup retained.",
+                    recoveryAction: .retry,
+                    detail: String(describing: error)
+                ))
         }
     }
 

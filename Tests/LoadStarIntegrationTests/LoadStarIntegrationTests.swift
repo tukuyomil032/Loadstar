@@ -188,7 +188,7 @@ final class LoadStarIntegrationTests: XCTestCase {
             name: "No Secret"
         )
         let encoded = try DocumentCodec().encode(payload)
-        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("opaque"))
+        XCTAssertFalse((String(bytes: encoded, encoding: .utf8) ?? "").contains("opaque"))
     }
 
     private func metadataPath(for id: ServerID) throws -> ManagedPath {

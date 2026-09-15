@@ -91,3 +91,8 @@ public struct PersistenceFailure: Error, Equatable, Sendable {
         self.issue = issue
     }
 }
+
+enum MigrationBackupPreparation: Sendable {
+    case success(MigrationBackup)
+    case failure(PersistenceIssue)
+}

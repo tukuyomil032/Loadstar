@@ -4,6 +4,8 @@ import XCTest
 
 @testable import LoadStarPersistence
 
+// The test class intentionally keeps the persistence state-machine scenarios together.
+// swiftlint:disable type_body_length
 final class LoadStarPersistenceTests: XCTestCase {
     func testManagedRootFolderNameIsStable() {
         XCTAssertEqual(LoadStarPersistence.managedRootFolderName, "LoadStar")
@@ -296,6 +298,86 @@ final class LoadStarPersistenceTests: XCTestCase {
         XCTAssertEqual(migratedData, expectedData)
     }
 
+    func testNextSuccessfulSaveCleansPreviousMigrationBackup() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: MigrationCoordinator(steps: [AddMarkerMigration()])
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let legacy: JSONValue = .object([
+            "documentType": .string("server-metadata"),
+            "schemaVersion": .integer(1),
+            "name": .string("legacy"),
+            "count": .integer(1),
+        ])
+        await fileSystem.put(try DocumentCodec().encodeRaw(legacy), at: path)
+
+        let migrationState = await store.load(MigratingPayload.self, documentType: .serverMetadata, at: path)
+        guard case .migrated(let payload, let backup) = migrationState else {
+            return XCTFail("Expected migration success, got \(String(describing: migrationState)).")
+        }
+        let backupExistsBeforeSave = await fileSystem.exists(at: backup.path)
+        XCTAssertTrue(backupExistsBeforeSave)
+
+        let saveState = await store.save(
+            try LoadStarDocument(
+                documentType: .serverMetadata,
+                revision: MigratingPayload.currentSchemaRevision,
+                payload: payload
+            ),
+            at: path
+        )
+
+        guard case .loaded = saveState else {
+            return XCTFail("Expected the subsequent save to succeed, got \(String(describing: saveState)).")
+        }
+        let backupExistsAfterSave = await fileSystem.exists(at: backup.path)
+        XCTAssertFalse(backupExistsAfterSave)
+    }
+
+    func testMigrationBackupCleanupFailureKeepsBackupAndRecordsRetryableDiagnostic() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: MigrationCoordinator(steps: [AddMarkerMigration()])
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let legacy: JSONValue = .object([
+            "documentType": .string("server-metadata"),
+            "schemaVersion": .integer(1),
+            "name": .string("legacy"),
+            "count": .integer(1),
+        ])
+        await fileSystem.put(try DocumentCodec().encodeRaw(legacy), at: path)
+
+        let migrationState = await store.load(MigratingPayload.self, documentType: .serverMetadata, at: path)
+        guard case .migrated(let payload, let backup) = migrationState else {
+            return XCTFail("Expected migration success, got \(String(describing: migrationState)).")
+        }
+        await fileSystem.setFailure(.remove)
+
+        let saveState = await store.save(
+            try LoadStarDocument(
+                documentType: .serverMetadata,
+                revision: MigratingPayload.currentSchemaRevision,
+                payload: payload
+            ),
+            at: path
+        )
+
+        guard case .loaded = saveState else {
+            return XCTFail("The saved document must remain valid when backup cleanup fails.")
+        }
+        let backupExistsAfterCleanupFailure = await fileSystem.exists(at: backup.path)
+        XCTAssertTrue(backupExistsAfterCleanupFailure)
+        let diagnostics = await store.recordedDiagnostics()
+        XCTAssertEqual(diagnostics.last?.code, "migration.backupCleanupPending")
+        XCTAssertEqual(diagnostics.last?.retryability, .retryable)
+    }
+
     func testMigrationFailurePreservesOriginalAndBackup() async throws {
         let fileSystem = InMemoryFileSystemClient()
         let store = DocumentStore(
@@ -319,6 +401,65 @@ final class LoadStarPersistenceTests: XCTestCase {
             return XCTFail("Expected rollback state, got \(String(describing: state)).")
         }
         XCTAssertEqual(issue.stage, .migration)
+        let retainedData = try await fileSystem.readData(at: path)
+        let backupData = try await fileSystem.readData(at: backup.path)
+        XCTAssertEqual(retainedData, legacyData)
+        XCTAssertEqual(backupData, legacyData)
+    }
+
+    func testMigrationValidationFailurePreservesOriginalAndBackup() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: MigrationCoordinator(steps: [InvalidMarkerMigration()])
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let legacy: JSONValue = .object([
+            "documentType": .string("server-metadata"),
+            "schemaVersion": .integer(1),
+            "name": .string("legacy"),
+            "count": .integer(1),
+        ])
+        let legacyData = try DocumentCodec().encodeRaw(legacy)
+        await fileSystem.put(legacyData, at: path)
+
+        let state = await store.load(MigratingPayload.self, documentType: .serverMetadata, at: path)
+
+        guard case .rolledBack(let issue, backup: let backup?) = state else {
+            return XCTFail("Expected validation rollback, got \(String(describing: state)).")
+        }
+        XCTAssertEqual(issue.stage, .validation)
+        let retainedData = try await fileSystem.readData(at: path)
+        let backupData = try await fileSystem.readData(at: backup.path)
+        XCTAssertEqual(retainedData, legacyData)
+        XCTAssertEqual(backupData, legacyData)
+    }
+
+    func testMigrationCommitFailurePreservesOriginalAndBackup() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: MigrationCoordinator(steps: [AddMarkerMigration()])
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let legacy: JSONValue = .object([
+            "documentType": .string("server-metadata"),
+            "schemaVersion": .integer(1),
+            "name": .string("legacy"),
+            "count": .integer(1),
+        ])
+        let legacyData = try DocumentCodec().encodeRaw(legacy)
+        await fileSystem.put(legacyData, at: path)
+        await fileSystem.setFailure(.replace)
+
+        let state = await store.load(MigratingPayload.self, documentType: .serverMetadata, at: path)
+
+        guard case .rolledBack(let issue, backup: let backup?) = state else {
+            return XCTFail("Expected commit rollback, got \(String(describing: state)).")
+        }
+        XCTAssertEqual(issue.stage, .replace)
         let retainedData = try await fileSystem.readData(at: path)
         let backupData = try await fileSystem.readData(at: backup.path)
         XCTAssertEqual(retainedData, legacyData)
@@ -363,6 +504,7 @@ final class LoadStarPersistenceTests: XCTestCase {
         )
     }
 }
+// swiftlint:enable type_body_length
 
 private struct CodecPayload: Codable, Equatable, Sendable, LoadStarDocumentPayload {
     static let documentType = DocumentType.serverMetadata
@@ -433,12 +575,28 @@ private struct ThrowingMigration: MigrationStep {
     }
 }
 
+private struct InvalidMarkerMigration: MigrationStep {
+    let documentType = DocumentType.serverMetadata
+    let fromRevision = 1
+    let toRevision = 2
+
+    func migrate(_ input: JSONValue) throws -> JSONValue {
+        guard case .object(var fields) = input else {
+            throw DocumentCodecError.rootIsNotObject
+        }
+        fields["marker"] = .string("")
+        fields["schemaVersion"] = .integer(2)
+        return .object(fields)
+    }
+}
+
 private enum FakeFileSystemOperation: Sendable {
     case write
     case synchronize
     case replace
     case copy
     case move
+    case remove
 }
 
 private actor InMemoryFileSystemClient: FileSystemClient {
@@ -508,6 +666,7 @@ private actor InMemoryFileSystemClient: FileSystemClient {
     }
 
     func removeItem(at path: ManagedPath) throws {
+        try failIfConfigured(.remove, target: path)
         files.removeValue(forKey: path)
         directories.remove(path)
     }
