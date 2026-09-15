@@ -115,4 +115,5 @@ public protocol FileSystemClient: Sendable {
     func removeItem(at path: ManagedPath) async throws
     func exists(at path: ManagedPath) async throws -> Bool
     func metadata(at path: ManagedPath) async throws -> FileMetadata
+    func listDirectory(at path: ManagedPath) async throws -> [ManagedPath]
 }
