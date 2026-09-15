@@ -11,18 +11,15 @@ public struct SecretKey: Codable, Hashable, Sendable {
     public let namespace: StorageNamespace
     public let serverID: ServerID?
     public let purpose: SecretPurpose
-    public let identifier: String?
 
     public init(
         namespace: StorageNamespace,
         serverID: ServerID? = nil,
-        purpose: SecretPurpose,
-        identifier: String? = nil
+        purpose: SecretPurpose
     ) {
         self.namespace = namespace
         self.serverID = serverID
         self.purpose = purpose
-        self.identifier = identifier
     }
 }
 

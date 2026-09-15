@@ -198,6 +198,22 @@ final class LoadStarPersistenceTests: XCTestCase {
         XCTAssertFalse(sourceExists)
     }
 
+    func testQuarantineRecordsUseUniqueOperationScopedPaths() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(fileSystem: fileSystem, clock: FixedClock())
+        let firstPath = try ManagedPath(components: ["servers", "first", "metadata.json"])
+        let secondPath = try ManagedPath(components: ["servers", "second", "metadata.json"])
+        await fileSystem.put(Data("broken-1".utf8), at: firstPath)
+        await fileSystem.put(Data("broken-2".utf8), at: secondPath)
+
+        _ = await store.load(CodecPayload.self, documentType: .serverMetadata, at: firstPath)
+        _ = await store.load(CodecPayload.self, documentType: .serverMetadata, at: secondPath)
+
+        let quarantinePaths = await fileSystem.quarantineDocumentPaths
+        XCTAssertEqual(quarantinePaths.count, 2)
+        XCTAssertEqual(Set(quarantinePaths).count, 2)
+    }
+
     func testMigrationBackupFailureKeepsOriginalDocument() async throws {
         let fileSystem = InMemoryFileSystemClient()
         await fileSystem.setFailure(.copy)
@@ -517,6 +533,12 @@ private actor InMemoryFileSystemClient: FileSystemClient {
 
     var quarantineFileCount: Int {
         files.keys.filter { $0.relativePath.hasPrefix("quarantine/documents/") }.count
+    }
+
+    var quarantineDocumentPaths: [ManagedPath] {
+        files.keys.filter { $0.relativePath.hasPrefix("quarantine/documents/") }.sorted {
+            $0.relativePath < $1.relativePath
+        }
     }
 
     var temporaryFileCount: Int {

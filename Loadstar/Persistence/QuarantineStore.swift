@@ -24,7 +24,7 @@ public struct QuarantineStore: Sendable {
         let quarantinePath = try ManagedPath(components: [
             "quarantine",
             "documents",
-            "(documentType.rawValue)-(quarantineID.rawValue).json",
+            "\(documentType.rawValue)-\(quarantineID.rawValue).json",
         ])
         if let parent = quarantinePath.parent {
             try await fileSystem.createDirectory(at: parent)
@@ -42,7 +42,7 @@ public struct QuarantineStore: Sendable {
         let recordPath = try ManagedPath(components: [
             "quarantine",
             "records",
-            "(quarantineID.rawValue).json",
+            "\(quarantineID.rawValue).json",
         ])
         do {
             if let parent = recordPath.parent {

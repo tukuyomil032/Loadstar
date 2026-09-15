@@ -13,7 +13,7 @@ public struct DiagnosticRedactor: Sendable {
         )
         result = replacingMatches(
             in: result,
-            pattern: #"/(?:Users|home)/[^\s\"']+"#,
+            pattern: #"(?<![A-Za-z0-9_])/(?:private/)?(?:Users|home|tmp|var|Volumes|Library|Applications)/[^\s\"']+"#,
             template: "<redacted>"
         )
         return result

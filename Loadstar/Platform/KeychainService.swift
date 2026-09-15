@@ -62,7 +62,6 @@ public final class KeychainService: KeychainClient, @unchecked Sendable {
 
     private func account(for key: SecretKey) -> String {
         let server = key.serverID?.rawValue ?? "global"
-        let identifier = key.identifier ?? "default"
-        return [server, key.purpose.rawValue, identifier].joined(separator: ":")
+        return [server, key.purpose.rawValue].joined(separator: ":")
     }
 }
