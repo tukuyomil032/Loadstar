@@ -27,6 +27,84 @@ final class LoadStarPersistenceTests: XCTestCase {
         XCTAssertThrowsError(try codec.decodeRaw(corruptData))
     }
 
+    func testServerMetadataV1MigratesWithExplicitPhase3Defaults() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: ServerMetadataMigrations.coordinator()
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let v1Data = try FixtureLoader.data(at: "Persistence/migration/v1-server-metadata.json")
+        await fileSystem.put(v1Data, at: path)
+
+        let state = await store.load(ServerMetadata.self, documentType: .serverMetadata, at: path)
+
+        guard case .migrated(let metadata, let backup) = state else {
+            return XCTFail(
+                "Expected the explicit server metadata migration to succeed, got \(String(describing: state)).")
+        }
+        XCTAssertEqual(metadata.runtimeConfiguration.serverPort, 25_565)
+        XCTAssertEqual(metadata.runtimeConfiguration.runtimeIdentity, .unknown)
+        XCTAssertNil(metadata.runtimeConfiguration.jarArtifact)
+        XCTAssertNil(metadata.runtimeConfiguration.javaVerification)
+        let migratedData = try await fileSystem.readData(at: path)
+        let backupData = try await fileSystem.readData(at: backup.path)
+        XCTAssertEqual(try DocumentCodec().decodeHeader(from: migratedData).revision, 2)
+        XCTAssertEqual(backupData, v1Data)
+
+        let v2Data = try FixtureLoader.data(at: "Persistence/migration/v2-server-metadata.json")
+        let migrated = try DocumentCodec().decode(
+            ServerMetadata.self, from: v2Data, expectedDocumentType: .serverMetadata)
+        XCTAssertEqual(metadata, migrated.payload)
+    }
+
+    func testInvalidPersistedArtifactIsQuarantinedInsteadOfAccepted() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: ServerMetadataMigrations.coordinator()
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let codec = DocumentCodec()
+        let validData = try FixtureLoader.data(at: "Persistence/migration/v2-server-metadata.json")
+        guard case .object(var fields) = try codec.decodeRaw(validData),
+            case .object(var configuration) = fields["runtimeConfiguration"]
+        else {
+            return XCTFail("The v2 fixture must contain a runtime configuration object.")
+        }
+
+        configuration["jarArtifact"] = .object([
+            "checksum": .object(["hex": .string("not-a-sha256")]),
+            "dependencies": .array([]),
+            "filename": .string("../server.jar"),
+            "gameVersion": .null,
+            "kind": .string("serverJar"),
+            "loader": .null,
+            "provenance": .object([
+                "observedAt": .null,
+                "safeSourceReference": .null,
+                "source": .string("imported"),
+                "verification": .string("verified"),
+                "verifiedAt": .null,
+            ]),
+            "source": .object(["kind": .string("imported")]),
+            "version": .null,
+        ])
+        fields["runtimeConfiguration"] = .object(configuration)
+        await fileSystem.put(try codec.encodeRaw(.object(fields)), at: path)
+
+        let state = await store.load(ServerMetadata.self, documentType: .serverMetadata, at: path)
+
+        guard case .repairRequired(let issue) = state else {
+            return XCTFail("Invalid persisted artifacts must require repair, got (String(describing: state)).")
+        }
+        XCTAssertEqual(issue.code, "document.invalid")
+        let originalExists = await fileSystem.exists(at: path)
+        XCTAssertFalse(originalExists)
+    }
+
     func testCodecFlattensPayloadAndRetainsUnknownFields() throws {
         let payload = CodecPayload(name: "alpha", count: 3)
         let document = try LoadStarDocument(

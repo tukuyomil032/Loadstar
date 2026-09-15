@@ -1,7 +1,42 @@
 {
-  "count": 1,
   "documentType": "server-metadata",
-  "marker": "migrated",
-  "name": "legacy",
-  "schemaVersion": 2
+  "identity": {
+    "displayName": "Legacy Server",
+    "group": null,
+    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  },
+  "policies": {
+    "backup": { "retentionCount": 3, "schedule": { "kind": "disabled" } },
+    "crashRecovery": { "delaySeconds": null, "mode": "prompt" },
+    "notifications": { "enabled": true, "highCPUAlertsEnabled": false }
+  },
+  "profileTemplateID": null,
+  "provenance": {
+    "observedAt": null,
+    "safeSourceReference": null,
+    "source": "userCreated",
+    "verification": "unverified",
+    "verifiedAt": null
+  },
+  "runtimeConfiguration": {
+    "eulaAccepted": false,
+    "javaSelection": { "kind": "systemDefault" },
+    "jarArtifact": null,
+    "jarFileName": "server.jar",
+    "javaVerification": null,
+    "jvmArguments": { "raw": "", "validatedTokens": [], "validation": "unvalidated" },
+    "memoryMiB": 2048,
+    "runtimeIdentity": {
+      "loader": null,
+      "minecraftVersion": "unknown",
+      "software": { "kind": "unknown", "rawValue": "unknown" }
+    },
+    "serverPort": 25565
+  },
+  "schemaVersion": 2,
+  "timestamps": {
+    "configurationChangedAt": "2023-11-14T22:13:20Z",
+    "lastVerifiedAt": null,
+    "registeredAt": "2023-11-14T22:13:20Z"
+  }
 }

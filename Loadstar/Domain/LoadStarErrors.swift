@@ -10,6 +10,11 @@ public enum DomainValidationError: Error, Equatable, Sendable {
     case invalidDisplayName
     case invalidMemoryMiB(Int)
     case invalidJarFileName(String)
+    case invalidServerPort(Int)
+    case invalidRuntimeIdentity
+    case invalidJavaVerification
+    case invalidJVMArguments(String)
+    case invalidArtifactIdentity
     case invalidChecksum(String)
     case invalidSchedule
     case invalidPolicy
@@ -33,6 +38,11 @@ public enum FailureStage: String, Codable, Sendable {
     case pathValidation
     case archiveValidation
     case keychain
+    case java
+    case process
+    case readiness
+    case eula
+    case termination
 }
 
 public enum Retryability: String, Codable, Sendable {

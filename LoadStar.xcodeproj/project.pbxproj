@@ -7,9 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		100000000000000000000011 /* LoadStarDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000021 /* LoadStarDomain */; };
-		100000000000000000000012 /* LoadStarUI in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000022 /* LoadStarUI */; };
+        100000000000000000000102 /* LoadStarAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* LoadStarAppUITests.swift */; };
+        100000000000000000000011 /* LoadStarDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000021 /* LoadStarDomain */; };
+        100000000000000000000012 /* LoadStarUI in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000022 /* LoadStarUI */; };
+        100000000000000000000013 /* LoadStarServices in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000023 /* LoadStarServices */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+        100000000000000000000003 /* LoadStar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoadStar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        100000000000000000000004 /* LoadStarAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle.xctest; includeInIndex = 0; path = LoadStarAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        100000000000000000000005 /* LoadStarAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadStarAppUITests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		100000000000000000000031 /* App */ = {
@@ -17,21 +25,27 @@
 			path = Loadstar/App;
 			sourceTree = "<group>";
 		};
-		100000000000000000000032 /* Resources */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Loadstar/Resources;
-			sourceTree = "<group>";
-		};
+        100000000000000000000032 /* Resources */ = {
+            isa = PBXFileSystemSynchronizedRootGroup;
+            path = Loadstar/Resources;
+            sourceTree = "<group>";
+        };
+        100000000000000000000033 /* App UI Tests */ = {
+            isa = PBXFileSystemSynchronizedRootGroup;
+            path = Tests/LoadStarAppUITests;
+            sourceTree = "<group>";
+        };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		100000000000000000000041 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				100000000000000000000011 /* LoadStarDomain in Frameworks */,
-				100000000000000000000012 /* LoadStarUI in Frameworks */,
-			);
+            files = (
+                100000000000000000000011 /* LoadStarDomain in Frameworks */,
+                100000000000000000000012 /* LoadStarUI in Frameworks */,
+                100000000000000000000013 /* LoadStarServices in Frameworks */,
+            );
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -39,21 +53,31 @@
 /* Begin PBXGroup section */
 		100000000000000000000001 = {
 			isa = PBXGroup;
-			children = (
+		children = (
 				100000000000000000000031 /* App */,
 				100000000000000000000032 /* Resources */,
+				100000000000000000000034 /* App UI Tests */,
 				100000000000000000000002 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
 		100000000000000000000002 /* Products */ = {
 			isa = PBXGroup;
-			children = (
-				100000000000000000000003 /* LoadStar.app */,
-			);
+            children = (
+                100000000000000000000003 /* LoadStar.app */,
+                100000000000000000000004 /* LoadStarAppUITests.xctest */,
+            );
 			name = Products;
 			sourceTree = "<group>";
 		};
+        100000000000000000000034 /* App UI Tests */ = {
+            isa = PBXGroup;
+            children = (
+                100000000000000000000005 /* LoadStarAppUITests.swift */,
+            );
+            path = Tests/LoadStarAppUITests;
+            sourceTree = "<group>";
+        };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -74,14 +98,33 @@
 				100000000000000000000032 /* Resources */,
 			);
 			name = LoadStar;
-			packageProductDependencies = (
-				100000000000000000000021 /* LoadStarDomain */,
-				100000000000000000000022 /* LoadStarUI */,
-			);
+            packageProductDependencies = (
+                100000000000000000000021 /* LoadStarDomain */,
+                100000000000000000000022 /* LoadStarUI */,
+                100000000000000000000023 /* LoadStarServices */,
+            );
 			productName = LoadStar;
 			productReference = 100000000000000000000003 /* LoadStar.app */;
-			productType = "com.apple.product-type.application";
-		};
+            productType = "com.apple.product-type.application";
+        };
+        100000000000000000000052 /* LoadStarAppUITests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = 100000000000000000000062 /* Build configuration list for PBXNativeTarget "LoadStarAppUITests" */;
+            buildPhases = (
+                100000000000000000000073 /* App UI Tests Sources */,
+                100000000000000000000074 /* App UI Tests Frameworks */,
+                100000000000000000000075 /* App UI Tests Resources */,
+            );
+            buildRules = (
+            );
+            dependencies = (
+                100000000000000000000081 /* PBXTargetDependency */,
+            );
+            name = LoadStarAppUITests;
+            productName = LoadStarAppUITests;
+            productReference = 100000000000000000000004 /* LoadStarAppUITests.xctest */;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -92,9 +135,13 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-					100000000000000000000051 = {
-						CreatedOnToolsVersion = 26.3;
-					};
+                    100000000000000000000051 = {
+                        CreatedOnToolsVersion = 26.3;
+                    };
+                    100000000000000000000052 = {
+                        CreatedOnToolsVersion = 26.3;
+                        TestTargetID = 100000000000000000000051;
+                    };
 				};
 			};
 			buildConfigurationList = 100000000000000000000111 /* Build configuration list for PBXProject "LoadStar" */;
@@ -114,9 +161,10 @@
 			productRefGroup = 100000000000000000000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (
-				100000000000000000000051 /* LoadStar */,
-			);
+            targets = (
+                100000000000000000000051 /* LoadStar */,
+                100000000000000000000052 /* LoadStarAppUITests */,
+            );
 		};
 /* End PBXProject section */
 
@@ -130,6 +178,24 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+        100000000000000000000081 /* PBXTargetDependency */ = {
+            isa = PBXTargetDependency;
+            target = 100000000000000000000051 /* LoadStar */;
+            targetProxy = 100000000000000000000091 /* PBXContainerItemProxy */;
+        };
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+        100000000000000000000091 /* PBXContainerItemProxy */ = {
+            isa = PBXContainerItemProxy;
+            containerPortal = 100000000000000000000101 /* Project object */;
+            proxyType = 1;
+            remoteGlobalIDString = 100000000000000000000051;
+            remoteInfo = LoadStar;
+        };
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXSourcesBuildPhase section */
 		100000000000000000000071 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -139,6 +205,37 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase (UI Tests) section */
+        100000000000000000000074 /* App UI Tests Frameworks */ = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXFrameworksBuildPhase (UI Tests) section */
+
+/* Begin PBXResourcesBuildPhase (UI Tests) section */
+        100000000000000000000075 /* App UI Tests Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXResourcesBuildPhase (UI Tests) section */
+
+/* Begin PBXSourcesBuildPhase (UI Tests) section */
+        100000000000000000000073 /* App UI Tests Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                100000000000000000000102 /* LoadStarAppUITests.swift in Sources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXSourcesBuildPhase (UI Tests) section */
 
 /* Begin XCBuildConfiguration section */
 		100000000000000000000131 /* Debug */ = {
@@ -209,7 +306,7 @@
 			};
 			name = Debug;
 		};
-		100000000000000000000142 /* Release */ = {
+        100000000000000000000142 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -231,8 +328,40 @@
 				PRODUCT_NAME = LoadStar;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
-			name = Release;
-		};
+            name = Release;
+        };
+        100000000000000000000151 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                CODE_SIGNING_ALLOWED = NO;
+                CODE_SIGNING_REQUIRED = NO;
+                GENERATE_INFOPLIST_FILE = YES;
+                MACOSX_DEPLOYMENT_TARGET = 26.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.tukuyomi032.loadstar.uitests;
+                PRODUCT_NAME = LoadStarAppUITests;
+                SWIFT_MODULE_NAME = LoadStarAppUITests;
+                SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+                SWIFT_VERSION = 6.0;
+                TEST_TARGET_NAME = LoadStar;
+            };
+            name = Debug;
+        };
+        100000000000000000000152 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                CODE_SIGNING_ALLOWED = NO;
+                CODE_SIGNING_REQUIRED = NO;
+                GENERATE_INFOPLIST_FILE = YES;
+                MACOSX_DEPLOYMENT_TARGET = 26.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.tukuyomi032.loadstar.uitests;
+                PRODUCT_NAME = LoadStarAppUITests;
+                SWIFT_MODULE_NAME = LoadStarAppUITests;
+                SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+                SWIFT_VERSION = 6.0;
+                TEST_TARGET_NAME = LoadStar;
+            };
+            name = Release;
+        };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -245,15 +374,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		100000000000000000000061 /* Build configuration list for PBXNativeTarget "LoadStar" */ = {
+        100000000000000000000061 /* Build configuration list for PBXNativeTarget "LoadStar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				100000000000000000000141 /* Debug */,
 				100000000000000000000142 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
+            defaultConfigurationName = Release;
+        };
+        100000000000000000000062 /* Build configuration list for PBXNativeTarget "LoadStarAppUITests" */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (
+                100000000000000000000151 /* Debug */,
+                100000000000000000000152 /* Release */,
+            );
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -268,10 +406,14 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LoadStarDomain;
 		};
-		100000000000000000000022 /* LoadStarUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LoadStarUI;
-		};
+        100000000000000000000022 /* LoadStarUI */ = {
+            isa = XCSwiftPackageProductDependency;
+            productName = LoadStarUI;
+        };
+        100000000000000000000023 /* LoadStarServices */ = {
+            isa = XCSwiftPackageProductDependency;
+            productName = LoadStarServices;
+        };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 100000000000000000000101 /* Project object */;

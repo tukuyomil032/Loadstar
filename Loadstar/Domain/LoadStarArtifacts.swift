@@ -109,6 +109,22 @@ public struct ArtifactIdentity: Codable, Equatable, Sendable {
         self.dependencies = dependencies
         self.provenance = provenance
     }
+
+    public func validate() throws {
+        guard !filename.isEmpty,
+            filename != ".",
+            filename != "..",
+            !filename.contains("/"),
+            !filename.contains("\\")
+        else {
+            throw DomainValidationError.invalidArtifactIdentity
+        }
+
+        _ = try SHA256Digest(validating: checksum.hex)
+        if case .provider(let name) = source, name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw DomainValidationError.invalidArtifactIdentity
+        }
+    }
 }
 
 public struct BackupDescriptor: Codable, Equatable, Sendable {

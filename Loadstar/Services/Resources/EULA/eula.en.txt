@@ -1,0 +1,7 @@
+Minecraft End-User License Agreement
+
+Minecraft: Java Edition server software requires the operator to review and accept the official Minecraft EULA before hosting a server. This bundled notice is provided for the launch consent flow; the current official terms are available at:
+
+https://www.minecraft.net/en-us/eula
+
+By accepting in LoadStar, you confirm that you have reviewed the official terms and agree to comply with them. LoadStar does not grant any additional rights to Minecraft software or content.

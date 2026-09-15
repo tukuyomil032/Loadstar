@@ -148,6 +148,51 @@ final class LoadStarPlatformTests: XCTestCase {
         XCTAssertTrue(detail.contains("<redacted>"))
     }
 
+    func testJavaHomeOutputParsingAndVersionParsingAreDeterministic() {
+        let output = """
+            17.0.12 (arm64) \"Eclipse Adoptium\" - /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
+            21.0.4 (arm64) \"Oracle Corporation\" - /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home
+            """
+        let installations = MacOSJavaRuntimeProvider.parseJavaHomeOutput(output)
+
+        XCTAssertEqual(installations.count, 2)
+        XCTAssertEqual(installations.map(\.majorVersion), [17, 21])
+        XCTAssertEqual(
+            JavaExecutableValidator.parseVersionOutput("openjdk version \"21.0.4\" 2024-07-16").majorVersion, 21)
+        XCTAssertEqual(JavaExecutableValidator.parseVersionOutput("java version \"1.8.0_401\"").majorVersion, 8)
+    }
+
+    func testJavaProviderResolvesManagedAndRejectsMissingSelection() async throws {
+        let installation = JavaInstallation(
+            identifier: "temurin-21",
+            executableURL: URL(fileURLWithPath: "/usr/bin/true"),
+            majorVersion: 21,
+            vendor: "Eclipse Adoptium"
+        )
+        let validator = JavaExecutableValidator(injectedVerification: { _ in
+            JavaVerification(majorVersion: 21, vendor: "Eclipse Adoptium", verification: .verified, verifiedAt: nil)
+        })
+        let provider = MacOSJavaRuntimeProvider(
+            installations: [installation], requiredMajorVersion: 21, validator: validator)
+
+        let resolved = try await provider.resolve(selection: .managed(identifier: "temurin-21"))
+        XCTAssertEqual(resolved.installationID, "temurin-21")
+        XCTAssertEqual(resolved.compatibility, .compatible)
+
+        do {
+            _ = try await provider.resolve(selection: .managed(identifier: "missing"))
+            XCTFail("A missing managed JDK must not silently fall back to system Java.")
+        } catch let error as JavaRuntimeError {
+            XCTAssertEqual(error, .installationMissing("missing"))
+        }
+    }
+
+    func testSLPPacketCodecRejectsMalformedResponse() {
+        XCTAssertThrowsError(try MinecraftSLPPacketCodec.decodeStatusResponse(Data([0x01, 0x01]))) { error in
+            XCTAssertEqual(error as? ServerListPingError, .malformedResponse)
+        }
+    }
+
     private func temporaryDirectory(named name: String) -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("LoadStarPlatformTests-\(name)-\(UUID().uuidString)", isDirectory: true)

@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "LoadStarFeatures", targets: ["LoadStarFeatures"]),
         .library(name: "LoadStarUI", targets: ["LoadStarUI"]),
         .library(name: "LoadStarGuide", targets: ["LoadStarGuide"]),
+        .executable(name: "LoadStarFixtureServer", targets: ["LoadStarFixtureServer"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/Defaults.git", from: "9.0.0"),
@@ -32,7 +33,8 @@ let package = Package(
         .target(
             name: "LoadStarServices",
             dependencies: ["LoadStarDomain", "LoadStarPersistence", "LoadStarPlatform", .product(name: "Sparkle", package: "Sparkle")],
-            path: "Loadstar/Services"
+            path: "Loadstar/Services",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "LoadStarFeatures",
@@ -45,6 +47,11 @@ let package = Package(
             path: "Loadstar/UI"
         ),
         .target(name: "LoadStarGuide", dependencies: ["LoadStarDomain", "LoadStarUI"], path: "Loadstar/Guide"),
+        .executableTarget(
+            name: "LoadStarFixtureServer",
+            dependencies: ["LoadStarDomain"],
+            path: "Fixtures/LoadStarFixtureServer"
+        ),
         .testTarget(name: "LoadStarDomainTests", dependencies: ["LoadStarDomain"], path: "Tests/LoadStarDomainTests"),
         .testTarget(
             name: "LoadStarPersistenceTests",

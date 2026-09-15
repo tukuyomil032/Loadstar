@@ -191,6 +191,75 @@ final class LoadStarIntegrationTests: XCTestCase {
         XCTAssertFalse((String(bytes: encoded, encoding: .utf8) ?? "").contains("opaque"))
     }
 
+    func testFixtureProcessEmitsDeterministicHumanAndEventTraces() throws {
+        guard let fixturePath = FixtureExecutableLocator.path() else {
+            throw XCTSkip("LOADSTAR_FIXTURE_SERVER_PATH is not set; fixture-dependent tests are skipped.")
+        }
+
+        let scenario = LoadStarFixtureScenario(
+            readyAfterMillis: 5_000,
+            stdout: ["fixture started"],
+            stderr: ["fixture diagnostic"],
+            invalidUTF8: true
+        )
+        let scenarioURL = temporaryDirectory(named: "fixture").appendingPathComponent("scenario.json")
+        try FileManager.default.createDirectory(
+            at: scenarioURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scenarioURL.deletingLastPathComponent()) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(scenario).write(to: scenarioURL)
+
+        let process = Process()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.executableURL = URL(fileURLWithPath: fixturePath)
+        process.arguments = ["--scenario", scenarioURL.path, "--port", "25565"]
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        process.terminate()
+        process.waitUntilExit()
+
+        let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let diagnostic = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        XCTAssertEqual(process.terminationStatus, 0)
+        XCTAssertTrue(output.contains("LoadStar fixture started"))
+        XCTAssertTrue(output.contains("LOADSTAR_EVENT {\"kind\":\"started\"}"))
+        XCTAssertTrue(output.contains("\u{FFFD}"))
+        XCTAssertTrue(diagnostic.contains("fixture diagnostic"))
+    }
+
+    func testFixtureReadyScenarioSpeaksMinecraftServerListPing() async throws {
+        guard let fixturePath = FixtureExecutableLocator.path() else {
+            throw XCTSkip("LOADSTAR_FIXTURE_SERVER_PATH is not set; fixture-dependent tests are skipped.")
+        }
+
+        let scenarioURL = temporaryDirectory(named: "slp").appendingPathComponent("scenario.json")
+        try FileManager.default.createDirectory(
+            at: scenarioURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scenarioURL.deletingLastPathComponent()) }
+        try JSONEncoder().encode(LoadStarFixtureScenario(readyAfterMillis: 0)).write(to: scenarioURL)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: fixturePath)
+        process.arguments = ["--scenario", scenarioURL.path, "--port", "25566"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        defer {
+            if process.isRunning { process.terminate() }
+            process.waitUntilExit()
+        }
+        try await Task.sleep(for: .milliseconds(150))
+
+        let ping = try await NetworkServerListPingClient().ping(
+            host: "127.0.0.1", port: 25_566, timeout: .seconds(2))
+        XCTAssertEqual(ping.versionName, "LoadStar Fixture")
+        XCTAssertEqual(ping.playersOnline, 0)
+    }
+
     private func metadataPath(for id: ServerID) throws -> ManagedPath {
         try ManagedPath(components: ["servers", id.rawValue, "metadata.json"])
     }

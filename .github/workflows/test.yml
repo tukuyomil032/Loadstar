@@ -50,7 +50,9 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p build
-          swift test --parallel 2>&1 | tee build/test.log
+          swift build --product LoadStarFixtureServer
+          FIXTURE_BIN="$(swift build --show-bin-path)/LoadStarFixtureServer"
+          LOADSTAR_FIXTURE_SERVER_PATH="${FIXTURE_BIN}" swift test --parallel 2>&1 | tee build/test.log
 
       - name: Upload test diagnostics
         if: failure()
