@@ -1,15 +1,16 @@
+import LoadStarDomain
 import SwiftUI
 
 public struct DashboardView: View {
-    public init() {}
+    private let snapshot: ServerRuntimeSnapshot
+
+    public init(snapshot: ServerRuntimeSnapshot? = nil) {
+        let id = ServerID(rawValue: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        self.snapshot = snapshot ?? ServerRuntimeSnapshot(serverID: id, lifecycle: .offline, readiness: .unknown)
+    }
 
     public var body: some View {
-        ContentUnavailableView(
-            "No Servers",
-            systemImage: "server.rack",
-            description: Text("Add a Minecraft server to get started.")
-        )
-        .frame(minWidth: 760, minHeight: 480)
+        ServerLifecycleView(snapshot: snapshot)
     }
 }
 
