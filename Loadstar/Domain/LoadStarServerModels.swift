@@ -264,6 +264,7 @@ public struct RuntimeConfiguration: Codable, Equatable, Sendable {
             throw DomainValidationError.invalidServerPort(serverPort)
         }
         try runtimeIdentity.validate()
+        try jarArtifact?.validate()
         try javaVerification?.validate()
 
         self.memoryMiB = memoryMiB
@@ -303,6 +304,7 @@ public struct RuntimeConfiguration: Codable, Equatable, Sendable {
             throw DomainValidationError.invalidServerPort(serverPort)
         }
         try runtimeIdentity.validate()
+        try jarArtifact?.validate()
         try javaVerification?.validate()
     }
 

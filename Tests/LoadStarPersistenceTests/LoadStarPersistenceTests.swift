@@ -59,6 +59,52 @@ final class LoadStarPersistenceTests: XCTestCase {
         XCTAssertEqual(metadata, migrated.payload)
     }
 
+    func testInvalidPersistedArtifactIsQuarantinedInsteadOfAccepted() async throws {
+        let fileSystem = InMemoryFileSystemClient()
+        let store = DocumentStore(
+            fileSystem: fileSystem,
+            clock: FixedClock(),
+            migrations: ServerMetadataMigrations.coordinator()
+        )
+        let path = try ManagedPath(components: ["servers", "legacy", "metadata.json"])
+        let codec = DocumentCodec()
+        let validData = try FixtureLoader.data(at: "Persistence/migration/v2-server-metadata.json")
+        guard case .object(var fields) = try codec.decodeRaw(validData),
+            case .object(var configuration) = fields["runtimeConfiguration"]
+        else {
+            return XCTFail("The v2 fixture must contain a runtime configuration object.")
+        }
+
+        configuration["jarArtifact"] = .object([
+            "checksum": .object(["hex": .string("not-a-sha256")]),
+            "dependencies": .array([]),
+            "filename": .string("../server.jar"),
+            "gameVersion": .null,
+            "kind": .string("serverJar"),
+            "loader": .null,
+            "provenance": .object([
+                "observedAt": .null,
+                "safeSourceReference": .null,
+                "source": .string("imported"),
+                "verification": .string("verified"),
+                "verifiedAt": .null,
+            ]),
+            "source": .object(["kind": .string("imported")]),
+            "version": .null,
+        ])
+        fields["runtimeConfiguration"] = .object(configuration)
+        await fileSystem.put(try codec.encodeRaw(.object(fields)), at: path)
+
+        let state = await store.load(ServerMetadata.self, documentType: .serverMetadata, at: path)
+
+        guard case .repairRequired(let issue) = state else {
+            return XCTFail("Invalid persisted artifacts must require repair, got (String(describing: state)).")
+        }
+        XCTAssertEqual(issue.code, "document.invalid")
+        let originalExists = await fileSystem.exists(at: path)
+        XCTAssertFalse(originalExists)
+    }
+
     func testCodecFlattensPayloadAndRetainsUnknownFields() throws {
         let payload = CodecPayload(name: "alpha", count: 3)
         let document = try LoadStarDocument(

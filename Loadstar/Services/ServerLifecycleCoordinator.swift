@@ -17,6 +17,7 @@ public struct SystemLifecycleSleeper: LifecycleSleeper {
 public actor ServerLifecycleCoordinator {
     private struct Session {
         let process: ProcessSession
+        let port: Int
         var snapshot: ServerRuntimeSnapshot
         var operationID: OperationID
         var stopRequested = false
@@ -89,8 +90,9 @@ public actor ServerLifecycleCoordinator {
         }
 
         let initial = ServerRuntimeSnapshot(serverID: serverID, lifecycle: .preparing, readiness: .unknown)
+        let operationID = OperationID.new()
         do {
-            try await checkpoint(initial, stage: .launch, operationID: .new())
+            try await checkpoint(initial, stage: .launch, operationID: operationID)
             let metadata = try await metadataRepository.load(serverID: serverID)
             let serverDirectory = try ManagedPath.serverDirectory(for: serverID)
             let preflight = LaunchPreflightService(
@@ -129,8 +131,12 @@ public actor ServerLifecycleCoordinator {
                     lifecycle: .running,
                     readiness: .probing
                 )
-                let operationID = OperationID.new()
-                var session = Session(process: process, snapshot: snapshot, operationID: operationID)
+                var session = Session(
+                    process: process,
+                    port: metadata.runtimeConfiguration.serverPort,
+                    snapshot: snapshot,
+                    operationID: operationID
+                )
                 sessions[serverID] = session
                 selectedServerID = serverID
                 session.eventTask = observeProcess(process.id, serverID: serverID)
@@ -267,7 +273,7 @@ public actor ServerLifecycleCoordinator {
         }
         selectedServerID = serverID
         if let serverID, let session = sessions[serverID], session.readinessTask == nil {
-            sessions[serverID]?.readinessTask = observeReadiness(serverID: serverID, port: 25_565)
+            sessions[serverID]?.readinessTask = observeReadiness(serverID: serverID, port: session.port)
         }
     }
 

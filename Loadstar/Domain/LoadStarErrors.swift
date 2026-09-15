@@ -14,6 +14,7 @@ public enum DomainValidationError: Error, Equatable, Sendable {
     case invalidRuntimeIdentity
     case invalidJavaVerification
     case invalidJVMArguments(String)
+    case invalidArtifactIdentity
     case invalidChecksum(String)
     case invalidSchedule
     case invalidPolicy
